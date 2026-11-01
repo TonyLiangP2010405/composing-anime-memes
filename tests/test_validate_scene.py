@@ -183,6 +183,31 @@ def test_quad_fill_requires_four_finite_nondegenerate_vertices(validator, quad):
     assert "frames[0].quad" in " ".join(errors)
 
 
+@pytest.mark.parametrize("location", ["actor", "frame"])
+def test_foreground_mask_file_is_validated(validator, location):
+    config = load_example()
+    if location == "actor":
+        config["actors"][0]["foreground_mask"] = "assets/teddy/missing.png"
+    else:
+        config["actors"][0]["frames"][0]["foreground_mask"] = "assets/teddy/missing.png"
+    errors = validator(config, base_dir=EXAMPLE.parent)
+    assert "foreground_mask" in " ".join(errors)
+
+
+def test_full_frame_foreground_mask_is_rejected(validator, tmp_path):
+    config = load_example()
+    for name in ("change-00.png", "change-01.png"):
+        write_mask(tmp_path / "assets/teddy" / name)
+    write_mask(
+        tmp_path / "assets/teddy/foreground.png",
+        value=255,
+        black_region=False,
+    )
+    config["actors"][0]["foreground_mask"] = "assets/teddy/foreground.png"
+    errors = validator(config, base_dir=tmp_path)
+    assert "foreground_mask" in " ".join(errors)
+
+
 def test_completed_scene_requires_visual_approval(validator):
     config = load_example()
     assert "visual_approval" in " ".join(validator(config, completed=True))

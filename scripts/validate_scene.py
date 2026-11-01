@@ -172,6 +172,15 @@ def validate_scene(
                             base_dir,
                             errors,
                         )
+                if "foreground_mask" in frame:
+                    validate_mask(
+                        frame["foreground_mask"],
+                        f"{field}.foreground_mask",
+                        source_size,
+                        True,
+                        base_dir,
+                        errors,
+                    )
         change_mask = actor.get("change_mask")
         if not str(change_mask or "").strip():
             errors.append(f"actors[{index}].change_mask is required")
@@ -181,6 +190,15 @@ def validate_scene(
                 f"actors[{index}].change_mask",
                 source_size,
                 expected_shape in {"target_mask", "surface_mask"},
+                base_dir,
+                errors,
+            )
+        if "foreground_mask" in actor:
+            validate_mask(
+                actor["foreground_mask"],
+                f"actors[{index}].foreground_mask",
+                source_size,
+                True,
                 base_dir,
                 errors,
             )
