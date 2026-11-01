@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples/character_scene.json"
@@ -10,6 +11,14 @@ EXAMPLE = ROOT / "examples/character_scene.json"
 
 def load_example():
     return json.loads(EXAMPLE.read_text(encoding="utf-8"))
+
+
+def write_mask(path, *, mode="L", size=(100, 100), value=255, black_region=True):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new(mode, size, value)
+    if black_region and mode in {"1", "L"}:
+        image.paste(0, (0, 0, 10, 10))
+    image.save(path)
 
 
 @pytest.fixture
@@ -27,6 +36,10 @@ def test_character_example_is_valid(validator):
     assert validator(load_example()) == []
 
 
+def test_character_example_assets_are_valid(validator):
+    assert validator(load_example(), base_dir=EXAMPLE.parent) == []
+
+
 @pytest.mark.parametrize(
     ("path", "value", "expected"),
     [
@@ -38,6 +51,9 @@ def test_character_example_is_valid(validator):
         (("actors", 0, "image"), 1, "image"),
         (("actors", 0, "frames"), [], "frames"),
         (("actors", 0, "change_mask"), "", "change_mask"),
+        (("actors", 0, "shape"), None, "shape"),
+        (("actors", 0, "shape"), "unknown", "shape"),
+        (("actors", 0, "shape"), "circle", "shape"),
         (("rectangle_photo",), True, "rectangle_photo"),
     ],
 )
@@ -52,6 +68,119 @@ def test_invalid_scene_fields_are_reported(validator, path, value, expected):
         target[path[-1]] = value
 
     assert expected in " ".join(validator(config))
+
+
+@pytest.mark.parametrize(
+    ("mode", "shape"),
+    [
+        ("character", "target_mask"),
+        ("photo", "quad_fill"),
+        ("print", "surface_mask"),
+        ("chalk", "target_mask"),
+    ],
+)
+def test_allowed_mode_shape_pairs_are_valid(validator, mode, shape):
+    config = load_example()
+    config["mode"] = mode
+    config["actors"][0]["shape"] = shape
+    assert validator(config, base_dir=EXAMPLE.parent) == []
+
+
+@pytest.mark.parametrize("filename", ["missing.png", "not-an-image.png"])
+def test_missing_and_unreadable_masks_are_reported(validator, tmp_path, filename):
+    config = load_example()
+    mask = tmp_path / "assets/teddy" / filename
+    if filename == "not-an-image.png":
+        mask.parent.mkdir(parents=True)
+        mask.write_text("not an image", encoding="utf-8")
+    config["actors"][0]["change_mask"] = f"assets/teddy/{filename}"
+    errors = validator(config, base_dir=tmp_path)
+    assert "change_mask" in " ".join(errors)
+
+
+@pytest.mark.parametrize(
+    ("mode", "size", "value", "black_region"),
+    [
+        ("RGB", (100, 100), (255, 255, 255), False),
+        ("L", (100, 100), 0, False),
+        ("L", (100, 100), 255, False),
+        ("L", (99, 100), 255, True),
+    ],
+)
+def test_mask_format_contents_and_size_are_validated(
+    validator, tmp_path, mode, size, value, black_region
+):
+    config = load_example()
+    for name in ("change-00.png", "change-01.png"):
+        write_mask(tmp_path / "assets/teddy" / name)
+    write_mask(
+        tmp_path / "assets/teddy/change-00.png",
+        mode=mode,
+        size=size,
+        value=value,
+        black_region=black_region,
+    )
+    errors = validator(config, base_dir=tmp_path)
+    assert "change_mask" in " ".join(errors)
+
+
+@pytest.mark.parametrize("shape", ["target_mask", "surface_mask"])
+def test_target_shapes_require_frame_masks(validator, shape):
+    config = load_example()
+    config["mode"] = "character" if shape == "target_mask" else "print"
+    config["actors"][0]["shape"] = shape
+    config["actors"][0]["frames"][0].pop("mask")
+    errors = validator(config, base_dir=EXAMPLE.parent)
+    assert "frames[0].mask" in " ".join(errors)
+
+
+@pytest.mark.parametrize(
+    "source_size",
+    [None, [100], [100, 0], [100, True], (100, 100), "100x100"],
+)
+def test_source_size_is_required_for_mask_dimension_validation(validator, source_size):
+    config = load_example()
+    if source_size is None:
+        config.pop("source_size")
+    else:
+        config["source_size"] = source_size
+    errors = validator(config, base_dir=EXAMPLE.parent)
+    assert "source_size" in " ".join(errors)
+
+
+@pytest.mark.parametrize("field", ["change_mask", "frame_mask"])
+def test_non_string_mask_paths_are_reported_without_raising(validator, field):
+    config = load_example()
+    if field == "change_mask":
+        config["actors"][0]["change_mask"] = 123
+    else:
+        config["actors"][0]["frames"][0]["mask"] = 123
+    errors = validator(config, base_dir=EXAMPLE.parent)
+    assert "mask" in " ".join(errors)
+
+
+@pytest.mark.parametrize(
+    "quad",
+    [
+        None,
+        [[0, 0], [10, 0], [10, 10]],
+        [[0, 0], [10, 0], [10, 10], [float("nan"), 10]],
+        [[0, 0], [10, 0], [10, 10], [10**10000, 10]],
+        [[0, 0], [10, 0], [20, 0], [30, 0]],
+        [[0, 0], [10, 0], [10, 10], [10, 10]],
+        [[0, 0], [20, 20], [0, 10], [10, 0]],
+    ],
+)
+def test_quad_fill_requires_four_finite_nondegenerate_vertices(validator, quad):
+    config = load_example()
+    config["mode"] = "photo"
+    config["actors"][0]["shape"] = "quad_fill"
+    if quad is None:
+        config["actors"][0]["frames"][0].pop("quad")
+    else:
+        config["actors"][0]["frames"][0]["quad"] = quad
+    errors = validator(config, base_dir=EXAMPLE.parent)
+    assert "frames[0].quad" in " ".join(errors)
 
 
 def test_completed_scene_requires_visual_approval(validator):

@@ -12,6 +12,7 @@
   "actors": [
     {
       "image": 0,
+      "shape": "target_mask",
       "change_mask": "assets/teddy/change-00.png",
       "frames": [
         {
