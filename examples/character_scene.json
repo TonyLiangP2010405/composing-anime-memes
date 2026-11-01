@@ -1,0 +1,36 @@
+{
+  "key": "example_teddy_character",
+  "mode": "character",
+  "reference_index": 0,
+  "image_count": 1,
+  "source": "example.gif",
+  "source_size": [100, 100],
+  "frames": [
+    {"index": 0, "duration": 50},
+    {"index": 1, "duration": 50}
+  ],
+  "actors": [
+    {
+      "image": 0,
+      "change_mask": "assets/teddy/change-00.png",
+      "frames": [
+        {
+          "index": 0,
+          "quad": [[12, 10], [86, 10], [86, 88], [12, 88]],
+          "mask": "assets/teddy/change-00.png"
+        },
+        {
+          "index": 1,
+          "quad": [[13, 10], [87, 10], [87, 88], [13, 88]],
+          "mask": "assets/teddy/change-01.png"
+        }
+      ]
+    }
+  ],
+  "visual_approval": {
+    "reviewer": "",
+    "approved": false,
+    "sha256": "",
+    "source_sha256": ""
+  }
+}
