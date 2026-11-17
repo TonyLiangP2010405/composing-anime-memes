@@ -1,5 +1,5 @@
 ---
-name: composing-anime-memes
+description: Use when building or repairing meme-generator 头像模板 from 斗图表情包, when the avatar must land in a circular or square opening of the artwork (电视/手机屏幕、相框、来电头像位、放大镜镜片、表盘、灯泡), when sourcing meme art from 发表情 fabiaoqing.com or 360 图片搜索, when avatars look pasted on as stickers, or when batch output lacks visual evidence.
 description: Use when building or repairing meme-generator 头像模板 from 斗图表情包, when the avatar must land in a circular/elliptical/rectangular opening of the artwork (熊猫头白脸、手机屏幕、相框、来电头像), when avatars look pasted on as stickers, when templates must be sourced from the web, or when batch output lacks visual evidence.
 ---
 
