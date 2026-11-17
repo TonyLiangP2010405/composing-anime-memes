@@ -1,0 +1,5 @@
+__pycache__/
+.pytest_cache/
+.browser-artifacts/
+*.pyc
+.DS_Store
