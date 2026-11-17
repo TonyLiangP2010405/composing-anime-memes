@@ -13,6 +13,7 @@ references/source-selection.md     # 找素材：发表情站内抓取（含接�
 references/acceptance-contract.md  # 三关验收：机械验证 / 视觉初审 / 用户终审
 scripts/harvest_fabiaoqing.py      # 发表情（fabiaoqing.com）搜索页抓取：list → thumbs → large
 scripts/track_slots.py             # 动图开口逐帧追踪（镜片滑动/手机晃动），输出 boxes
+scripts/author_multi.py            # 多人模板：一张图多个开口，images = 开口数
 scripts/validate_pack.py           # 校验一个模板包：几何、素材、SHA-256、渲染、头像是否真的落在开口里
 tests/test_validate_pack.py        # validate_pack.py 的测试
 ```
@@ -40,6 +41,7 @@ python -m pytest tests -q
 - 头像先裁到脸部再用 cover 缩放填满开口；帽子、外侧头发、衣领、背景不得占满替换区。
 - 原图的描边、机身、镜框、字幕全部保留；box 不得吃进描边。
 - 动图先判断开口是否移动：会动就用逐帧追踪（`scripts/track_slots.py`）让头像贴着开口走，静止才复用单 box。
+- 图里有多块开口就做多人模板：`images` = 开口数，每人一个 `image`（`scripts/author_multi.py`）。
 - 机械测试全绿 ≠ 视觉合格；没有验收记录就写"未核验"，不写 0 或估算值。
 
 ## License
