@@ -1,13 +1,13 @@
 ---
 name: composing-anime-memes
-description: Use when building meme-generator 0.1.x head-swap templates from real 斗图 GIFs or 表情包 (熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋), when the avatar must fully cover the original face, when animated GIF heads move and the avatar must follow per frame, or when the result looks like a pasted sticker / leaves the old face, cheeks, chin, or ears visible.
+description: Use when building meme-generator 0.1.x head-swap templates from real 斗图 GIFs or 表情包 (滑稽脸、熊猫头、狗头、蘑菇头、拿刀/拍桌/滚蛋), when the avatar must fully cover the original face, when animated GIF heads move and the avatar must follow per frame, or when the result looks like a pasted sticker / leaves the old face, cheeks, chin, or ears visible.
 ---
 
 # Composing Anime Memes
 
 ## Overview
 
-给 `meme-generator 0.1.x` 做**真·斗图换头模板**：底图必须是真实斗图表情包（熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋等），只替换原图的脸，身体、道具、字幕、边框全部保留。
+给 `meme-generator 0.1.x` 做**真·斗图换头模板**：底图必须是真实斗图表情包（滑稽脸、熊猫头、狗头、蘑菇头、拿刀/拍桌/滚蛋等；**不用真人照片/真人反应图**），只替换原图的脸，身体、道具、字幕、边框全部保留。
 
 三条硬规则：
 
@@ -19,8 +19,8 @@ description: Use when building meme-generator 0.1.x head-swap templates from rea
 
 ## Required workflow
 
-- [ ] 选真实斗图底图：**优先滑稽脸、熊猫脸**，其次狗头/蘑菇头，最后真人反应图；记录来源 URL 和版权说明。
-- [ ] 量脸框：用 Haar 人脸检测（真人脸/鲁迅）或光流（熊猫头这种风格化脸）得到每帧脸中心；不要用整个头/耳朵的中心。
+- [ ] 选真实斗图底图：**优先滑稽脸、熊猫脸**，其次狗头/蘑菇头；**不用真人照片/真人反应图**；记录来源 URL 和版权说明。
+- [ ] 量脸框：用光流（熊猫头/滑稽脸这种风格化脸）得到每帧脸中心；不要用整个头/耳朵的中心。
 - [ ] 定头像尺寸：圆形直径 ≥ 脸框对角线 `sqrt(w²+h²)`；想保留熊猫耳朵就用椭圆蒙版，按脸型而不是正圆。
 - [ ] 写模板包：`__init__.py` + `_common.py` + `images/base.gif` + `meta.json`；用 0.1.x 的 `add_meme`。
 - [ ] 用真实头像生成；检查帧数、尺寸、时长；生成原图/换头对比 GIF 和关键帧对比图。
@@ -33,7 +33,7 @@ description: Use when building meme-generator 0.1.x head-swap templates from rea
 ### 1.1 脸框不是头框
 
 - 熊猫头的耳朵、身体不能作为中心；脸框是白色脸/人脸的矩形。
-- 真人脸/鲁迅：`cv2.CascadeClassifier(haarcascade_frontalface_default.xml)` 检测，检测框向外扩 10–20% 覆盖下巴/额头。
+- **真人底图一律淘汰**：不做真人照片/真人反应图，也不要拿 Haar 硬做；拿到真人素材直接换。
 - 熊猫头/风格化脸：先用网格图或肉眼给出首帧脸框，再用 `scripts/track_heads.py` 做光流跟踪，输出每帧中心。
 - 不要用模板匹配直接追整张脸：熊猫脸的表情/颜色会变，匹配会跳到耳朵/身体上；光流跟眼睛/鼻子/嘴的特征点更稳。
 
@@ -44,7 +44,6 @@ description: Use when building meme-generator 0.1.x head-swap templates from rea
 - 脸框 100×110 → D_min 148.7；用 154–158（示例用 156）。
 - 脸框 110×110 → D_min 155.6；用 160–162。
 - 脸框 90×100 → D_min 134.5；用 138–142。
-- 鲁迅脸框 186×186（2× 画布）→ D_min 263；只盖中央脸用 210，但下巴/额头可能露；要全盖就 266–270。
 - 熊猫头特写 600×584 → 用 600。
 
 如果盖脸会盖掉熊猫耳朵，这是取舍：
@@ -176,9 +175,9 @@ uv pip install --python /tmp/meme-venv/bin/python "meme-generator==0.1.14" openc
 ## 4. 找真实斗图底图
 
 - 主力：发表情 `fabiaoqing.com` 站内搜索（`scripts/harvest_fabiaoqing.py`），或斗图啦 `doutula.com/search?keyword=...`。
-- **优先题材：滑稽脸 → 熊猫脸 → 狗头/蘑菇头 → 真人反应图。** 滑稽脸是规整的黄色圆脸，脸里没有头发、耳朵、手，边界最干净；熊猫脸是白色蛋形脸，黑耳朵/黑身体天然当边框，椭圆蒙版最容易贴准。真人脸型不规整，头发、下巴、手都容易露，放到最后。
+- **优先题材：滑稽脸 → 熊猫脸 → 狗头/蘑菇头。真人照片/真人反应图一律不用。** 滑稽脸是规整的黄色圆脸，脸里没有头发、耳朵、手，边界最干净；熊猫脸是白色蛋形脸，黑耳朵/黑身体天然当边框，椭圆蒙版最容易贴准。真人脸型不规整，头发、下巴、手都容易露，还有肖像/版权风险。
 - 滑稽脸关键词：`滑稽`、`滑稽脸`、`贴吧滑稽`、`滑稽 动图`；熊猫头关键词见下。
-- 关键词按梗分：`滑稽`、`滑稽脸`、`熊猫头 表情包`、`狗头 表情包`、`蘑菇头 表情包`、`鲁迅 问号`、`拿刀 熊猫`、`拍桌 熊猫`、`滚蛋 熊猫`、`贴脸 表情包`。
+- 关键词按梗分：`滑稽`、`滑稽脸`、`熊猫头 表情包`、`狗头 表情包`、`蘑菇头 表情包`、`拿刀 熊猫`、`拍桌 熊猫`、`滚蛋 熊猫`、`贴脸 表情包`。
 - 不要用：`meme-generator` 内置模板、素材站的空白模板、自己画的插画。
 - 记录原始页面 URL、图片 URL、SHA-256 到 `meta.json` / `ASSET_SOURCES.md`；素材版权归原作者，仅限群内非商业使用。
 
@@ -195,12 +194,13 @@ uv pip install --python /tmp/meme-venv/bin/python "meme-generator==0.1.14" openc
 | “只看首帧就行” | 后续帧会漂移/露脸；逐帧看 |
 | “0.2.x 更新，直接用” | API 不兼容；0.1.x |
 | “能出图就算完成” | 覆盖、对齐、跟随都要单独验收 |
-| “真人反应图更真实，先做真人” | 脸型不规整，头发/下巴/手最容易露；优先滑稽脸/熊猫脸 |
+| “真人反应图更真实，做几张真人” | 一律不用真人底图：肖像/版权风险，脸型也不规整 |
 | “素材网上随便找，不用记来源” | 记录来源和版权；非商业使用 |
 
 ## Red flags — STOP
 
 - 内置模板改名 / 自己画插画 / 空白模板素材。
+- 用真人照片、真人反应图做底图。
 - 原脸的眼睛、鼻子、嘴、脸颊、下巴、额头还露着。
 - 头像中心在耳朵/身体上，不在脸上。
 - 动图里头像固定在原地，原头已经移走。
