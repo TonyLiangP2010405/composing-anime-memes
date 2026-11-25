@@ -18,6 +18,7 @@ references/acceptance-contract.md   # 机械验证 / 覆盖检查 / 动态跟随
 scripts/harvest_fabiaoqing.py       # 发表情搜索页抓取：list → thumbs → large
 scripts/track_heads.py              # 光流跟踪 GIF 里的脸中心，输出 HEAD_CENTERS + 可视化
 scripts/check_coverage.py           # 画脸框和头像圆，检查是否完整覆盖
+scripts/audit_meme.py               # 检查头像是否吃掉原图：题材/占比/放大倍数/三层可见性
 templates/head_swap_template/       # 模板骨架：__init__.py.tmpl + _common.py + meta.json.tmpl
 ```
 
@@ -44,6 +45,8 @@ python scripts/check_coverage.py --meta /path/to/template/meta.json --frame 0
 
 - 底图必须是真实斗图，不是内置模板、不是插画、不是空白素材。
 - 题材优先级：**滑稽脸 → 熊猫脸 → 狗头/蘑菇头**。真人照片/真人反应图一律不用。
+- 头像不能吃掉原图：脸占比 >45% 的大头特写默认不做；椭圆 1.05–1.10× 脸框；换完 200 px 下要能认出角色/道具/字幕。
+- 批量生成先跑 `scripts/audit_meme.py --meta meta.json --strict`，任何 WARN 都不算通过；手工特写模板可不用 strict，但必须过三层可见性 + 200 px 测试。
 - 脸框不是头框：中心按脸框，不按耳朵/身体。
 - 圆形直径 ≥ 脸框对角线 + 3–5 px；要保留熊猫耳朵就换椭圆蒙版，但椭圆只保证盖脸型中央，四角是耳朵/背景，必须视觉确认旧五官不露。
 - 动图用 `HEAD_CENTERS` 逐帧贴，不能固定一个坐标。

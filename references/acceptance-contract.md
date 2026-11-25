@@ -52,7 +52,23 @@ python scripts/check_coverage.py --file images/base.gif \
 - 生成原图/换头并排 GIF：左原图、右换头；关键帧对比图覆盖首/中/尾；
 - 缩小到聊天窗口约 200 px 再看一眼，确认没有“贴纸感”。
 
-## 第四关：用户终审
+## 第四关：原图可读性
+
+```bash
+python scripts/audit_meme.py --meta meta.json --strict
+```
+
+检查：
+
+- `audit_meme.py --strict` 必须 `OK`（不是 `WARN`）；
+- 底图题材是 panda/huaji，不是 dog/object；
+- 椭圆 ≤ 1.12 × 检测框；头像椭圆面积 ≤ 80% 画面；
+- 三层可见性：角色轮廓（耳朵/头套/身体）、梗道具（柠檬/手/刀/花/牌子）、字幕，至少保留两类；
+- 缩到 200 px 还能认出原梗；只剩一张头像 = 失败。
+
+任何一项失败，模板淘汰或换底图，不计入通过数。
+
+## 第五关：用户终审
 
 - 给用户看完整预览和原图/换头对比 GIF；
 - 用户提出问题的模板记为待修，**不计入通过数**；
@@ -65,6 +81,7 @@ python scripts/check_coverage.py --file images/base.gif \
 机械验证：通过 X/Y（模板加载、帧数/尺寸/时长、meta.json 完整）
 覆盖检查：通过 X/Y（脸框在头像圆内 / 椭圆内切 70% 脸框）
 动态跟随：通过 X/Y（逐帧中心与头像位置一致）
+原图可读性：通过 X/Y（audit_meme.py + 三层可见性 + 200 px 测试）
 视觉初审：通过 X/Y，证据路径…
 用户终审：通过 X/Y
 待修/淘汰：key + 原因
