@@ -1,6 +1,6 @@
 # composing-anime-memes
 
-给 [meme-generator](https://github.com/MemeCrafters/meme-generator) **0.1.x** 做**真·斗图换头模板**的 Agent Skill：从真实斗图表情包（熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋）出发，量脸框、定头像尺寸、逐帧跟随、生成模板、做覆盖/对齐验收。
+给 [meme-generator](https://github.com/MemeCrafters/meme-generator) **0.1.x** 做**真·斗图换头模板**的 Agent Skill：从真实斗图表情包（**优先滑稽脸、熊猫脸**，其次狗头/蘑菇头、真人反应图）出发，量脸框、定头像尺寸、逐帧跟随、生成模板、做覆盖/对齐验收。
 
 这个 skill 替代了旧版“圆形/方形开口”流程。旧流程只处理原图里画好的几何开口；新版处理**直接盖脸**的斗图换头，重点解决三类被用户否掉的问题：
 
@@ -26,7 +26,7 @@ templates/head_swap_template/       # 模板骨架：__init__.py.tmpl + _common.
 ```bash
 # 1. 找真实斗图底图
 python scripts/harvest_fabiaoqing.py list --out /tmp/fbq --pages 4 \
-  --keywords 熊猫头 狗头 蘑菇头 鲁迅问号 拿刀熊猫 拍桌熊猫 滚蛋熊猫
+  --keywords 滑稽 滑稽脸 熊猫头 狗头 蘑菇头 拿刀熊猫 拍桌熊猫 滚蛋熊猫
 python scripts/harvest_fabiaoqing.py thumbs --out /tmp/fbq
 python scripts/harvest_fabiaoqing.py large --out /tmp/fbq --pick 0 2 3
 
@@ -43,6 +43,7 @@ python scripts/check_coverage.py --meta /path/to/template/meta.json --frame 0
 ## 核心规则
 
 - 底图必须是真实斗图，不是内置模板、不是插画、不是空白素材。
+- 题材优先级：**滑稽脸 → 熊猫脸 → 狗头/蘑菇头 → 真人反应图**。滑稽脸/熊猫脸边界干净、面积大，换头最容易对齐。
 - 脸框不是头框：中心按脸框，不按耳朵/身体。
 - 圆形直径 ≥ 脸框对角线 + 3–5 px；要保留熊猫耳朵就换椭圆蒙版，但椭圆只保证盖脸型中央，四角是耳朵/背景，必须视觉确认旧五官不露。
 - 动图用 `HEAD_CENTERS` 逐帧贴，不能固定一个坐标。
