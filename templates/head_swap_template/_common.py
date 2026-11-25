@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 from pil_utils import Text2Image
 
 from meme_generator.utils import save_gif
@@ -37,32 +37,86 @@ def load_frames(path) -> list[Image.Image]:
     return frames
 
 
+def _face_crop(image: Image.Image, ratio: float) -> Image.Image:
+    """Crop a square around the busiest part of the avatar (eyes, mouth, edges).
+
+    The edge-energy centroid is blended half-way with the image center so a
+    busy background cannot drag the crop off the face.  ``ratio`` < 1 removes
+    the avatar's border (hat brim, shoulders, background) without cutting the
+    chin: 0.85 keeps a normal headshot intact and still trims the frame.
+    """
+
+    width, height = image.size
+    side = max(1, int(min(width, height) * ratio))
+    small = image.convert("L").resize((64, 64), Image.BILINEAR)
+    data = list(small.filter(ImageFilter.FIND_EDGES).getdata())
+
+    total = 0.0
+    sum_x = 0.0
+    sum_y = 0.0
+    for y in range(64):
+        row = y * 64
+        for x in range(64):
+            value = data[row + x]
+            if value < 24:
+                continue
+            total += value
+            sum_x += x * value
+            sum_y += y * value
+
+    if total:
+        cx = (sum_x / total) / 64 * width
+        cy = (sum_y / total) / 64 * height
+        cx = cx * 0.5 + width * 0.25
+        cy = cy * 0.5 + height * 0.25
+    else:
+        cx, cy = width / 2, height / 2
+
+    left = min(max(0, round(cx - side / 2)), width - side)
+    top = min(max(0, round(cy - side / 2)), height - side)
+    return image.crop((left, top, left + side, top + side))
+
+
+def _cover(image: Image.Image, width: int, height: int) -> Image.Image:
+    """Scale-and-crop (no stretching) so the image fills width x height."""
+
+    scale = max(width / image.width, height / image.height)
+    new_width = max(width, round(image.width * scale))
+    new_height = max(height, round(image.height * scale))
+    resized = image.resize((new_width, new_height), Image.LANCZOS)
+    left = (new_width - width) // 2
+    top = (new_height - height) // 2
+    return resized.crop((left, top, left + width, top + height))
+
+
 def avatar(
     images,
     width: int,
     height: int | None = None,
     *,
     shape: str = "circle",
+    zoom: float = 0.85,
 ) -> Image.Image:
-    """Crop the input avatar to a circle/ellipse/rect with a thin outline.
+    """Crop the input avatar to the face and mask it to a circle/ellipse/rect.
 
-    ``shape="circle"`` uses ``width`` for both axes.  ``shape="ellipse"``
-    accepts a different ``height`` and is the way to cover a face while leaving
-    panda ears visible.
+    The layer has no outline: the original meme already draws its own face
+    edge, and an added ring reads as a pasted sticker.
     """
 
     height = width if height is None else height
-    image = images[0].convert("RGBA").square().resize((width, height))
+    raw = images[0].convert("RGBA").image
+    image = _cover(_face_crop(raw, zoom), width, height)
     if shape == "rect":
-        layer = image.image
-        ImageDraw.Draw(layer).rectangle((0, 0, width - 1, height - 1), outline=INK, width=3)
-        return layer
+        return image
 
-    mask = Image.new("L", (width, height), 0)
-    ImageDraw.Draw(mask).ellipse((0, 0, width - 1, height - 1), fill=255)
+    oversample = 4
+    mask = Image.new("L", (width * oversample, height * oversample), 0)
+    ImageDraw.Draw(mask).ellipse(
+        (0, 0, width * oversample - 1, height * oversample - 1), fill=255
+    )
+    mask = mask.resize((width, height), Image.LANCZOS)
     layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    layer.paste(image.image, (0, 0), mask)
-    ImageDraw.Draw(layer).ellipse((0, 0, width - 1, height - 1), outline=INK, width=3)
+    layer.paste(image, (0, 0), mask)
     return layer
 
 

@@ -86,7 +86,17 @@ from meme_generator import (
     get_meme_keys,
 )
 
-from ._common import avatar, load_frames, paste_center, save
+import importlib.util
+
+_COMMON_SPEC = importlib.util.spec_from_file_location(
+    f"{__name__}._common", Path(__file__).parent / "_common.py"
+)
+_common = importlib.util.module_from_spec(_COMMON_SPEC)
+_COMMON_SPEC.loader.exec_module(_common)
+avatar = _common.avatar
+load_frames = _common.load_frames
+paste_center = _common.paste_center
+save = _common.save
 
 img_dir = Path(__file__).parent / "images"
 HEAD_CENTERS = [(130, 72), (133, 76)]  # 逐帧脸中心，由 track_heads.py 生成
@@ -141,7 +151,8 @@ if "key" not in get_meme_keys():
 
 - `meta.json` 记录 `key`、`source`、`face_box`、`avatar_size`、`centers`、`source_url`、`license_note`；`scripts/check_coverage.py --meta meta.json` 直接读它。
 - `_common.py` 提供 `load_frames`、`avatar`、`paste_center`、`text_img`、`animate_static`、`save`；每个模板目录自带一份，保证单独拷走也能用。
-- `add_meme` 用 0.1.x 签名；`load_memes` 可能重复执行带相对 import 的包，用 `get_meme_keys()` 去重。
+- **不要写 `from ._common import ...`**：`load_memes()` 用 `pkgutil` 直接执行模块，不会把模板目录注册成包，相对 import 会报 `ModuleNotFoundError`。用上面的 `importlib.util.spec_from_file_location` 显式加载同目录 `_common.py`。
+- `add_meme` 用 0.1.x 签名；`load_memes` 可能重复执行同一个模板目录，用 `get_meme_keys()` 去重。
 - 0.2.x 是 Rust 绑定，API 不同（`Meme.generate`、`Image`、`meme.info.params`），不要混用。
 
 ## 3. 生成与验收

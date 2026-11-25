@@ -20,7 +20,17 @@ from meme_generator import (
     get_meme_keys,
 )
 
-from ._common import avatar, load_frames, paste_center, save
+import importlib.util
+
+_COMMON_SPEC = importlib.util.spec_from_file_location(
+    f"{__name__}._common", Path(__file__).parent / "_common.py"
+)
+_common = importlib.util.module_from_spec(_COMMON_SPEC)
+_COMMON_SPEC.loader.exec_module(_common)
+avatar = _common.avatar
+load_frames = _common.load_frames
+paste_center = _common.paste_center
+save = _common.save
 
 img_dir = Path(__file__).parent / "images"
 
