@@ -1,133 +1,210 @@
 ---
 name: composing-anime-memes
-description: Use when building or repairing meme-generator 头像模板 from 斗图表情包, when the avatar must land in a circular or square opening of the artwork (电视/手机屏幕、相框、来电头像位、放大镜镜片、表盘、灯泡), when sourcing meme art from 发表情 fabiaoqing.com or 360 图片搜索, when avatars look pasted on as stickers, or when batch output lacks visual evidence.
+description: Use when building meme-generator 0.1.x head-swap templates from real 斗图 GIFs or 表情包 (熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋), when the avatar must fully cover the original face, when animated GIF heads move and the avatar must follow per frame, or when the result looks like a pasted sticker / leaves the old face, cheeks, chin, or ears visible.
 ---
 
 # Composing Anime Memes
 
 ## Overview
 
-做 `meme-generator 0.1.x` 的头像模板时，**替换区必须是原图里已经画出来的规整图形，只接受圆形和方形/圆角方形**：手机屏幕、电视机、相框、报纸照片位、圆形镜片、表盘、灯泡玻璃、圆形徽章。头像裁在这块几何区域里，原图的描边、机身、镜框、文字全部保留，边缘天然"严丝合缝"。
+给 `meme-generator 0.1.x` 做**真·斗图换头模板**：底图必须是真实斗图表情包（熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋等），只替换原图的脸，身体、道具、字幕、边框全部保留。
 
-**椭圆（蛋形）不算规整图形，一律不接受。** 按脸型拟合出来的椭圆、拉长的蛋形、任何"像脸但不是正圆/正方"的开口都淘汰——它在聊天窗口里会明显读成"贴上去的一坨"。
+三条硬规则：
 
-**禁止逐像素描脸。** 描脸（沿发际线、下颌勾一条可见皮肤轮廓）在真实斗图里永远对不齐，结果就是"贴纸感"。上游 meme-generator 的模板同样是标准矩形/圆形粘贴，这是行业做法，不是偷懒。
+1. **底图必须是真斗图**。不能把 `meme-generator` 内置模板改个名字，不能自己画插画，不能用素材站的空白模板。
+2. **头像必须完整盖住原脸**。按脸框（不是整个头/耳朵）对齐；圆形直径至少覆盖脸框对角线，否则脸颊、下巴、额头会露出来。
+3. **动图必须逐帧跟随**。原 GIF 的头会动时，模板要存 `HEAD_CENTERS`，每帧按对应中心贴头像；固定一个坐标一定会脱节。
 
-**头像层只放脸。** 头像先用亮度梯度能量图找"细节重心"（眼睛、嘴、轮廓），按比例裁成方形再 cover 填满替换区；头像自带的帽子、头发外轮廓、衣领、背景不得占满替换区。必要时用 `zoom` 把多余头发挤出边界。
-
-没有通过机械验证、完整 GIF 初审和用户终审的成果，不得标记为完成。
+没有通过覆盖/对齐检查、完整 GIF 初审和用户终审的成果，不得标记完成。
 
 ## Required workflow
 
-- [ ] 先确认替换区身份：这张表情包里，头像要落在哪块**几何开口**上？（熊猫白脸 / 屏幕 / 相框 / 头像位 / 报纸照片）
-- [ ] 素材来自**真实的斗图表情包**，不是网上现成的"空白模板素材"。用户要的是"基于斗图表情包做模板"，不是"找模板"。
-- [ ] 用检测工具量出开口的几何参数（圆形/方形 + box），并生成带标注的总览图目视核对，**不靠肉眼估坐标**。
-- [ ] 开口必须被深色线条完整包围；描边有缺口、脸压到黑边、开口贴图片边缘的素材一律淘汰。
-- [ ] 为模板声明 `shape`，**只能取 `circle` / `square` / `rect` / `roundrect`**；`box` 必须落在源图范围内，圆形要接近正圆（宽高差 ≤ 10%），方形接近正方（宽高比 ≤ 1.25）。
-- [ ] 图里有**多块**可换区域时（电视屏幕 + 熊猫白脸、两个灯泡、两张脸、三个手机），做**多人模板**：`images` = 开口数，每个 slot 的 `image` 指向第几个头像（`scripts/author_multi.py`）。群聊场景优先多人。
-- [ ] 渲染出图，逐张对照原图检查：替换区是否吃进黑边、是否残留旧脸、头像是否只露脸。
-- [ ] 动图模板：**先判断开口本身是否移动**。镜片滑动、手机晃动这类开口会动的，必须逐帧追踪出 `boxes`（`scripts/track_slots.py`），让头像贴着开口走；只有屏幕/表盘这类开口静止的才用单 `box`。给会动的开口配单 box，头像就会和表情脱节——这是用户明确否掉过的错误。
-- [ ] 动图抽 4 帧（首/中/尾 + 遮挡最重的一帧）核对：头像边缘始终贴着开口、不漂移、不残影。
-- [ ] 跑机械验证 + 完整 GIF 初审 + 用户终审，分别记录数量，不合并成"全部完成"。
+- [ ] 选真实斗图底图：熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋等；记录来源 URL 和版权说明。
+- [ ] 量脸框：用 Haar 人脸检测（真人脸/鲁迅）或光流（熊猫头这种风格化脸）得到每帧脸中心；不要用整个头/耳朵的中心。
+- [ ] 定头像尺寸：圆形直径 ≥ 脸框对角线 `sqrt(w²+h²)`；想保留熊猫耳朵就用椭圆蒙版，按脸型而不是正圆。
+- [ ] 写模板包：`__init__.py` + `_common.py` + `images/base.gif` + `meta.json`；用 0.1.x 的 `add_meme`。
+- [ ] 用真实头像生成；检查帧数、尺寸、时长；生成原图/换头对比 GIF 和关键帧对比图。
+- [ ] 逐帧检查：原脸（眼睛、鼻子、嘴、脸颊、下巴、额头）是否完全被盖住；头像是否跟着原图的头动；身体/道具/字幕是否保留。
+- [ ] 跑 `scripts/check_coverage.py --meta meta.json` 和 `scripts/track_heads.py`，把覆盖与跟随结果写进交付记录。
+- [ ] 记录素材来源、版权、验证证据路径。
 
-## 1. 形状契约
+## 1. 量脸框与逐帧中心
 
-| 原图开口 | `shape` | 参数来源 | 合格判据 |
-|---|---|---|---|
-| 圆形镜片、表盘、灯泡、硬币、猫眼、圆徽章 | `circle` | 圆环检测（`rings`）或色块圆检测（`discs`） | 拟合半径与开口一致，宽高差 ≤ 10%，不吃镜框 |
-| 电视/手机/显示器屏幕 | `rect` / `roundrect` | 亮面板检测（`panels`）或深色蒙版孔洞 | 四边贴住屏幕内侧；圆角屏幕用 `roundrect` + 半径 |
-| 相框、报纸照片、白板、举牌 | `square` / `rect` | 同上，宽高比 ≤ 1.25 记 `square` | 头像填满相纸/牌面，不越过边框 |
-| 来电头像、圆角卡片 | `roundrect` | 手工量 box + 半径 | 圆角半径与原图一致 |
-| **蛋形/椭圆开口** | — | — | **淘汰**，不建模板 |
+### 1.1 脸框不是头框
 
-**box 一经确定就是唯一形状依据**：不得在渲染时改成圆形、不得按头像输入形状变化、不得为了统一风格把所有模板改成同一尺寸。
+- 熊猫头的耳朵、身体不能作为中心；脸框是白色脸/人脸的矩形。
+- 真人脸/鲁迅：`cv2.CascadeClassifier(haarcascade_frontalface_default.xml)` 检测，检测框向外扩 10–20% 覆盖下巴/额头。
+- 熊猫头/风格化脸：先用网格图或肉眼给出首帧脸框，再用 `scripts/track_heads.py` 做光流跟踪，输出每帧中心。
+- 不要用模板匹配直接追整张脸：熊猫脸的表情/颜色会变，匹配会跳到耳朵/身体上；光流跟眼睛/鼻子/嘴的特征点更稳。
 
-## 2. 渲染契约
+### 1.2 头像尺寸
 
-固定顺序（见渲染实现）：
+圆形要覆盖矩形脸框的四个角，直径至少 `sqrt(w²+h²)`。**理论值再加 3–5 px 余量**：150 对 148.7 只剩 0.67 px，光流抖动 1–2 px 就会露边，建议 154–158（示例 156）。例：
 
-1. 读源图（长边 ≤ 480），GIF 保留帧与时长；
-2. 头像 → `face_crop`：亮度梯度能量图 + 中心偏置，取高能量像素重心，按 `0.62 × min(w, h)` 裁方形；
-3. `cover` 等比缩放填满 box（不拉伸），按 `anchor` 竖向偏移；
-4. 形状蒙版 4× 超采样绘制后降采样得到抗锯齿边，按 `feather` 羽化；
-5. 可选 `depth` 内阴影（屏幕/相框类，让头像"嵌进去"）、`ring` 描边（原图没画边框时补）；
-6. 逐帧合成：开口会动的模板读 `boxes` 里当帧的位置，开口静止的模板复用同一个 `box`；GIF 用共用调色板 + `disposal=2`，静态图 JPEG q93。
+- 脸框 100×110 → D_min 148.7；用 154–158（示例用 156）。
+- 脸框 110×110 → D_min 155.6；用 160–162。
+- 脸框 90×100 → D_min 134.5；用 138–142。
+- 鲁迅脸框 186×186（2× 画布）→ D_min 263；只盖中央脸用 210，但下巴/额头可能露；要全盖就 266–270。
+- 熊猫头特写 600×584 → 用 600。
 
-参数默认值：`feather` 1.0、`anchor` 0.45、`zoom` 1.05；圆形开口（镜头、表盘、灯泡）通常 `zoom` 1.02–1.08 让脸填满正圆，屏幕/相框类保持 1.0 并加 3–5 px 内阴影。
+如果盖脸会盖掉熊猫耳朵，这是取舍：
 
-## 3. 找素材（从网页抓真实斗图表情包）
+- 用户要“把脸盖住”时，优先大圆盖脸。
+- 用户要保留耳朵时，用椭圆蒙版：椭圆宽高 = 脸框宽高 × 1.05–1.1，中心 = 脸中心；耳朵在椭圆外，自然保留。
+- 椭圆蒙版只保证盖住脸型中央，**不保证矩形四角**。要连四角（脸颊/下巴/额头）都盖住，椭圆需 ≥ √2 ≈ 1.42× 脸框，会盖住耳朵——这时直接用大圆。`check_coverage.py --shape ellipse` 只检查内切 70% 脸框，输出 `COVERED (ELLIPSE)`，必须配合视觉初审。
 
-```bash
-# 索引 + 缩略图墙：360 图片搜索（中文召回最好）
-python tools/harvest_templates.py fetch --out /tmp/net "熊猫头表情包 搞笑"
-python tools/harvest_templates.py thumbs --out /tmp/net
-python tools/harvest_templates.py pick --out /tmp/net 12 23 44
+### 1.3 动图
 
-# 批量检测每张表情包的几何开口，输出带标注的总览图
-python tools/review_slots.py /tmp/net/original --out /tmp/review
-```
+- 先判断头是否动：抽首/中/尾帧，看脸中心位移 > 3 px 就逐帧。
+- 用 `scripts/track_heads.py --file base.gif --box x,y,w,h` 输出 `HEAD_CENTERS` 和可视化。
+- 把中心写进模板常量；运行时不要依赖 OpenCV（模板只依赖 PIL/pil_utils）。
+- 如果头还有明显旋转/缩放，补旋转/缩放参数；只做平移会看起来“贴着脸滑”。
 
-- 只保留深色线条完整包围开口的素材；`fit` 越大越好，`angle` 偏离轴对齐超 12° 的丢弃；检测出的 `ellipse` 直接淘汰。
-- 中文斗图优先用站内搜索直接抓（发表情 fabiaoqing.com，`scripts/harvest_fabiaoqing.py`，比搜索引擎干净），其次 360 图片搜索（`image.so.com/j`）；Google 图片接口实测会被 IP 封到 `sorry/index`，别在它上面耗时间。
-- 动图用 `motion`（替换区内跨帧平均差）筛：> 100 说明脸在动，改用逐帧 `boxes` 或换素材。
-- 保留原始页面 URL、图片 URL、SHA-256 写进 `ASSET_SOURCES.md`；表情包版权归原作者，仅限群内非商业使用。
-- 搜索词按目标形状分：方形/屏幕用 `电视 看电视 手机 屏幕 电脑 显示器 相框 报纸 白板 举牌`，圆形用 `圆形 圆框 镜子 放大镜 钟表 时钟 灯泡 硬币 球`。搜"空白模板/素材"得到的是素材站图，不是斗图，不要用。
-
-## 4. 落模板与验证
-
-```bash
-python tools/author_slot.py scan  /tmp/net/original/0012.jpg        # 看检测结果
-python tools/author_slot.py add --id 0023 --title "新模板" --file /tmp/net/original/0012.jpg
-python tools/build_pack.py
-python tools/render_previews.py --avatars a,c --sheet /tmp/qa.jpg   # 出 QA 总览 + 预览页
-python -m pytest tests -q
-python -m ruff check .
-```
-
-机械验证至少覆盖：注册表与 `scenes.json` 一致、每个模板可渲染且尺寸/帧数受控、换头像输出必变、头像确实落在替换区（黑色头像与白色头像的区内亮度差 > 60）、box 不越界、图片数量校验。
-
-视觉初审：把 QA 总览图放大到单张看——替换区边缘是否吃黑边、旧脸是否有残边、头像是否只剩脸。动图抽首/中/尾 3–4 帧看固定与闪烁。
-
-## Delivery contract
-
-最终回复分开列，数量只来自实际记录，没有记录写"未核验"：
+## 2. 模板包契约
 
 ```text
-机械验证：通过 X/Y（无记录时写未核验）
-视觉初审：通过 X/Y，证据路径（无记录时写未核验）
-用户终审：通过 X/Y（无记录时写未核验）
-待修或淘汰：模板键名及原因
+<repo>/<key>/
+├── __init__.py
+├── _common.py
+├── meta.json
+└── images/base.gif
 ```
 
-只要仍有未初审或未经用户终审的模板，就写"部分完成"。
+`__init__.py`：
+
+```python
+from pathlib import Path
+
+from arclet.alconna import store_true
+from pydantic import Field
+
+from meme_generator import (
+    MemeArgsModel,
+    MemeArgsType,
+    ParserOption,
+    add_meme,
+    get_meme_keys,
+)
+
+from ._common import avatar, load_frames, paste_center, save
+
+img_dir = Path(__file__).parent / "images"
+HEAD_CENTERS = [(130, 72), (133, 76)]  # 逐帧脸中心，由 track_heads.py 生成
+
+
+class Model(MemeArgsModel):
+    circle: bool = Field(True, description="是否把头像裁成圆形")
+
+
+args_type = MemeArgsType(
+    args_model=Model,
+    args_examples=[Model(circle=True), Model(circle=False)],
+    parser_options=[
+        ParserOption(
+            names=["--circle", "圆"],
+            default=True,
+            action=store_true,
+            help_text="是否把头像裁成圆形",
+        )
+    ],
+)
+
+
+def render(images, texts, args: Model):
+    head = avatar(images, 156, shape="circle" if args.circle else "rect")
+    source = load_frames(img_dir / "base.gif")
+    center_list = [HEAD_CENTERS] if isinstance(HEAD_CENTERS, tuple) else HEAD_CENTERS
+    if len(center_list) == 1:
+        centers = center_list * len(source)
+    elif len(center_list) == len(source):
+        centers = center_list
+    else:
+        raise ValueError(f"{len(source)} frames vs {len(center_list)} centers")
+    frames = []
+    for index, frame in enumerate(source):
+        frame = frame.copy()
+        paste_center(frame, head, centers[index])
+        frames.append(frame)
+    return save(frames, 0.08)
+
+
+if "key" not in get_meme_keys():
+    add_meme(
+        "key",
+        render,
+        min_images=1,
+        max_images=1,
+        args_type=args_type,
+        keywords=["关键词"],
+    )
+```
+
+- `meta.json` 记录 `key`、`source`、`face_box`、`avatar_size`、`centers`、`source_url`、`license_note`；`scripts/check_coverage.py --meta meta.json` 直接读它。
+- `_common.py` 提供 `load_frames`、`avatar`、`paste_center`、`text_img`、`animate_static`、`save`；每个模板目录自带一份，保证单独拷走也能用。
+- `add_meme` 用 0.1.x 签名；`load_memes` 可能重复执行带相对 import 的包，用 `get_meme_keys()` 去重。
+- 0.2.x 是 Rust 绑定，API 不同（`Meme.generate`、`Image`、`meme.info.params`），不要混用。
+
+## 3. 生成与验收
+
+```bash
+uv venv --python 3.11 /tmp/meme-venv
+uv pip install --python /tmp/meme-venv/bin/python "meme-generator==0.1.14" opencv-python-headless
+/tmp/meme-venv/bin/python /path/to/_run_test.py
+```
+
+至少检查：
+
+- 模板能 `load_memes` 加载，`get_meme(key)` 返回 1 张图的参数。
+- 输出帧数 = 原 GIF 帧数（或说明合并了相同帧）；尺寸/时长正常。
+- 原图/换头对比 GIF：左原图、右换头；关键帧对比图覆盖首/中/尾。
+- 每帧原脸都被盖住：眼睛、鼻子、嘴、脸颊、下巴、额头没有残边。
+- 动图头像跟着原图的头走，不是固定坐标。
+- 原图的菜刀、蛋、字幕、问号、身体没有被头像盖掉（除非用户要求）。
+- 记录 `MECHANICAL_ONLY` 和视觉初审的数量，不合并成“全部完成”。
+
+## 4. 找真实斗图底图
+
+- 主力：发表情 `fabiaoqing.com` 站内搜索（`scripts/harvest_fabiaoqing.py`），或斗图啦 `doutula.com/search?keyword=...`。
+- 关键词按梗分：`熊猫头 表情包`、`狗头 表情包`、`蘑菇头 表情包`、`鲁迅 问号`、`拿刀 熊猫`、`拍桌 熊猫`、`滚蛋 熊猫`、`贴脸 表情包`。
+- 不要用：`meme-generator` 内置模板、素材站的空白模板、自己画的插画。
+- 记录原始页面 URL、图片 URL、SHA-256 到 `meta.json` / `ASSET_SOURCES.md`；素材版权归原作者，仅限群内非商业使用。
 
 ## Rationalizations
 
 | 借口 | 现实 |
 |---|---|
-| "沿脸部皮肤描一条轮廓才叫严丝合缝" | 描脸对不齐，反而制造贴纸感；标准图形才是上游做法 |
-| "椭圆也是规整图形" | 用户明确只要圆形和方形；椭圆在聊天尺寸下会读成贴上去的一坨 |
-| "圆形/方形太粗糙，用户会嫌假" | 形状来自原图已经画出的开口，不是硬套 |
-| "多贴一点把头发也盖住更自然" | 头发、帽子、衣领进入画面就是贴纸，用 `zoom` 推出去 |
-| "先搜空白模板素材更快" | 用户要"基于斗图表情包做模板"，素材站图不是斗图 |
-| "肉眼估个坐标就行" | 手工估的 box 会吃黑边；用孔洞检测再目视复核 |
-| "能出图、测试全绿就算完成" | 只证明可运行；吃黑边、残脸、动图残影都要单独检查 |
-| "先批量做 50 个再挑" | 一个样板确认方向后再扩，返工成本最低 |
-| "动图脸会动就切逐帧手标" | 先筛头部静止素材；只有必要时才逐帧 box |
-| "没有验收记录就写 0/100" | 0 是实测值；无记录必须写未核验 |
+| “把内置模板改个名字就是新模板” | 用户明确否掉；必须是新底图/新构图 |
+| “自己画一个卡通场景也算表情包” | 用户要的是斗图；插画不像斗图 |
+| “头像固定一个坐标就行” | 动图的头会动，固定坐标会脱节 |
+| “按整个头/耳朵的中心贴” | 脸会偏；按脸框中心 |
+| “头像直径等于脸宽就够了” | 脸框四角会露；用对角线 |
+| “把熊猫耳朵也盖住才干净” | 耳朵是熊猫识别点；要保留就换椭圆蒙版 |
+| “只看首帧就行” | 后续帧会漂移/露脸；逐帧看 |
+| “0.2.x 更新，直接用” | API 不兼容；0.1.x |
+| “能出图就算完成” | 覆盖、对齐、跟随都要单独验收 |
+| “素材网上随便找，不用记来源” | 记录来源和版权；非商业使用 |
 
 ## Red flags — STOP
 
-- 用描脸多边形或椭圆代替原图的圆形/方形开口。
-- 替换区吃进原图黑色描边/边框，边缘出现黑边缺口或白边月牙。
-- 头像整张（含帽子、外侧头发、衣领、背景）填满替换区而不裁脸。
-- 替换区里有旧脸残边、旧五官、旧五官投影。
-- box 越界、越界部分被渲染器裁掉导致形状变形。
-- 用"空白模板素材"冒充斗图表情包。
-- 动图开口会动却只给单 box，头像和表情脱节（镜片移走了头像还在原地）。
-- 图里明明有第二块空白区域却只做一个头像位（群聊表情包应当多人）。
-- 动图里头像跟着脸漂移、闪烁、残影。
-- 只看静帧/抽样就宣布通过。
-- 把 `mechanical passing` 写成"视觉质量保证"。
-- 重新渲染后沿用旧审批。
-- 未通过项计入完成数量。
+- 内置模板改名 / 自己画插画 / 空白模板素材。
+- 原脸的眼睛、鼻子、嘴、脸颊、下巴、额头还露着。
+- 头像中心在耳朵/身体上，不在脸上。
+- 动图里头像固定在原地，原头已经移走。
+- 只检查首帧或缩略图。
+- 用 0.2.x API 或 `Meme.generate`。
+- 没有原图/换头对比证据。
+- 头像盖住菜刀、蛋、字幕、问号等原图信息。
+- 未通过项计入完成数。
+
+## Delivery contract
+
+```text
+机械验证：通过 X/Y（模板加载、帧数/尺寸/时长、meta.json 完整）
+覆盖检查：通过 X/Y（脸框在头像圆内 / 椭圆蒙版覆盖）
+动态跟随：通过 X/Y（逐帧中心与头像位置一致）
+视觉初审：通过 X/Y，证据路径…
+用户终审：通过 X/Y
+待修/淘汰：key + 原因
+```
+
+没有记录写“未核验”，不写 0/100 或估算值。

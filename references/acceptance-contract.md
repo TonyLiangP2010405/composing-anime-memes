@@ -1,53 +1,73 @@
-# 验收契约
+# 验收契约：换头模板
 
-分三关，逐关留证据，数量分开报，**不得合并成"全部完成"**。
+分四关，逐关留证据，数量分开报，**不得合并成“全部完成”**。
 
 ## 第一关：机械验证
 
 ```bash
-python scripts/validate_pack.py memes/<pack>       # 输出 MECHANICAL_ONLY 或 FAIL
-python -m pytest tests -q
-python -m ruff check .
+/tmp/meme-venv/bin/python - <<'PY'
+from pathlib import Path
+from meme_generator import get_meme, load_memes
+load_memes(Path("/path/to/template/root"))
+meme = get_meme("your_key")
+print(meme.params_type)
+PY
 ```
 
-`validate_pack.py` 检查：
+检查：
 
-- 每个模板的 `shape` 合法、`box` 落在源图内、`boxes` 帧数对齐；
-- 素材存在、尺寸与 `source_sha256` 与 `scenes.json` 一致；
-- 每个帧序号存在于源动画里；
-- 渲染器能出图、长边 ≤ 480；
-- 换头像输出必变；
-- 黑头像与白头像的**替换区内亮度差 > 60**（证明头像真的落在开口里，而不是被别的内容盖住）。
+- 模板能被 `load_memes` 加载，`get_meme(key)` 返回 `min_images=1, max_images=1`；
+- `meta.json` 存在，含 `key`、`source`、`face_box`、`avatar_size`、`centers`；
+- 输出帧数 = 原 GIF 帧数（或说明合并了相同帧）；
+- 输出尺寸与原图一致；时长 > 0；
+- `avatar_size` ≥ `sqrt(face_w² + face_h²) + 3`（圆形）；椭圆蒙版参数合法，且记录 `ellipse_size`；
+- `centers` 数量 = 原帧数，或明确说明是固定中心。
 
-`MECHANICAL_ONLY` 表示"没发现结构问题"，**不代表视觉合格**。
+## 第二关：覆盖与对齐
 
-## 第二关：视觉初审
+```bash
+python scripts/check_coverage.py --meta meta.json --frame 0 --out /tmp/coverage.png
 
-逐模板看，不看缩略图就下结论：
+# 或手传参数
+python scripts/check_coverage.py --file images/base.gif \
+  --box 80,22,100,110 --size 156 --center 130,77 --out /tmp/coverage.png
+```
 
-1. 把 QA 总览图放大到单张（`tools/render_previews.py` 的 `--sheet` 或 `previews/*.jpg`）；
-2. 对照原图检查：替换区是否吃进黑描边、有没有白月牙、旧脸有没有残边、头像是不是只剩脸；
-3. 用两个差异大的头像各跑一遍（照片脸 + 卡通脸），确认不是碰巧好看；
-4. 动图播放完整 GIF（至少抽首/中/尾 3–4 帧）确认：**开口会动的模板里头像要贴着开口一起走**，开口静止的模板里头像保持静止；无残影闪烁、循环接缝正常；
-5. 缩小到聊天窗口显示尺寸（约 200 px）再看一眼——很多问题在缩略尺寸才暴露；
-6. **多人模板**：按顺序传 a/b/c 三个不同头像，确认每个开口都换到不同的人、互不覆盖、没有哪个开口空着。
+检查：
 
-记录：通过 X/Y，证据路径（`previews/index.html`、`previews/catalog-sheet.jpg`、单张输出文件）。
+- 圆形：脸框四角都在头像圆内，输出 `COVERED`；
+- 椭圆：只检查内切 70% 脸框，输出 `COVERED (ELLIPSE)`；椭圆四角是耳朵/背景，必须视觉确认旧五官不露；要连四角都盖住就改用大圆；
+- `avatar_size` ≥ D_min + 3–5 px（例如 D_min 148.7 → 154–158）；
+- 原脸的眼睛、鼻子、嘴、脸颊、下巴、额头没有残边；
+- 头像中心在脸上，不在耳朵/身体/道具上；
+- 头像没有盖住菜刀、蛋、字幕、问号等原图信息（除非用户要求）；
+- 动图至少检查首/中/尾 + 位移最大的一帧，每帧都 `COVERED` / `COVERED (ELLIPSE)`。
 
-## 第三关：用户终审
+**只看首帧不算通过。**
 
-- 给用户看完整预览页（`previews/index.html`，自包含单文件）和总览图；
+## 第三关：动态跟随
+
+- 动图有 `HEAD_CENTERS`，每帧按对应中心贴；
+- 原图的头移动时，头像跟着移动，不漂移、不残影；
+- 生成原图/换头并排 GIF：左原图、右换头；关键帧对比图覆盖首/中/尾；
+- 缩小到聊天窗口约 200 px 再看一眼，确认没有“贴纸感”。
+
+## 第四关：用户终审
+
+- 给用户看完整预览和原图/换头对比 GIF；
 - 用户提出问题的模板记为待修，**不计入通过数**；
-- 任何重新渲染（改 box、改 zoom、换素材、改编码）都会让旧的初审失效，必须重跑第一、二关；
-- 终审通过后记录模板键名、输出文件 SHA-256、素材 `source_sha256`。
+- 任何重新渲染（改尺寸、改中心、换底图、改编码）都会让旧初审失效，必须重跑第一、二、三关；
+- 终审通过后记录 key、输出文件 SHA-256、底图 `source_sha256`。
 
-## 报告的固定格式
+## 报告格式
 
 ```text
-机械验证：通过 X/Y（无记录时写未核验）
-视觉初审：通过 X/Y，证据路径…（无记录时写未核验）
-用户终审：通过 X/Y（无记录时写未核验）
-待修或淘汰：键名 + 原因
+机械验证：通过 X/Y（模板加载、帧数/尺寸/时长、meta.json 完整）
+覆盖检查：通过 X/Y（脸框在头像圆内 / 椭圆内切 70% 脸框）
+动态跟随：通过 X/Y（逐帧中心与头像位置一致）
+视觉初审：通过 X/Y，证据路径…
+用户终审：通过 X/Y
+待修/淘汰：key + 原因
 ```
 
-没有任何记录时写"未核验"，不要写 0/100、估算值或计划数。
+没有任何记录时写“未核验”，不要写 0/100、估算值或计划数。

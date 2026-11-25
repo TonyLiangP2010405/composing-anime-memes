@@ -1,0 +1,91 @@
+"""__TITLE__
+
+Copy this file to ``__init__.py`` and replace the __PLACEHOLDER__ values.
+For an ellipse mask, set SHAPE="ellipse" and AVATAR_HEIGHT != AVATAR_WIDTH.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+from arclet.alconna import store_true
+from pydantic import Field
+
+from meme_generator import (
+    MemeArgsModel,
+    MemeArgsType,
+    ParserOption,
+    add_meme,
+    get_meme_keys,
+)
+
+from ._common import avatar, load_frames, paste_center, save
+
+img_dir = Path(__file__).parent / "images"
+
+KEY = "__KEY__"
+# Per-frame face centers from scripts/track_heads.py.  A single tuple is
+# broadcast to every frame; a list must match the source frame count.
+HEAD_CENTERS = __HEAD_CENTERS__
+SHAPE = "__SHAPE__"  # circle / ellipse / rect
+AVATAR_WIDTH = __AVATAR_WIDTH__
+AVATAR_HEIGHT = __AVATAR_HEIGHT__
+DURATION = __DURATION__
+
+HELP = "是否把头像裁成圆形"
+
+
+class Model(MemeArgsModel):
+    circle: bool = Field(True, description=HELP)
+
+
+args_type = MemeArgsType(
+    args_model=Model,
+    args_examples=[Model(circle=True), Model(circle=False)],
+    parser_options=[
+        ParserOption(
+            names=["--circle", "圆"],
+            default=True,
+            action=store_true,
+            help_text=HELP,
+        ),
+    ],
+)
+
+
+def render(images, texts, args: Model):
+    head = avatar(
+        images,
+        AVATAR_WIDTH,
+        AVATAR_HEIGHT,
+        shape=SHAPE if args.circle else "rect",
+    )
+    source = load_frames(img_dir / "base.gif")
+    center_list = [HEAD_CENTERS] if isinstance(HEAD_CENTERS, tuple) else HEAD_CENTERS
+    if len(center_list) == 1:
+        centers = center_list * len(source)  # static face: reuse one center
+    elif len(center_list) == len(source):
+        centers = center_list
+    else:
+        raise ValueError(f"{len(source)} frames vs {len(center_list)} centers")
+
+    frames = []
+    for index, frame in enumerate(source):
+        frame = frame.copy()
+        paste_center(frame, head, centers[index])
+        frames.append(frame)
+    return save(frames, DURATION)
+
+
+if KEY not in get_meme_keys():
+    add_meme(
+        KEY,
+        render,
+        min_images=1,
+        max_images=1,
+        args_type=args_type,
+        keywords=__KEYWORDS__,
+        date_created=datetime.now(),
+        date_modified=datetime.now(),
+    )

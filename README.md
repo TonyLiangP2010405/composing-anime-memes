@@ -1,48 +1,53 @@
 # composing-anime-memes
 
-给 [meme-generator](https://github.com/MemeCrafters/meme-generator) 做**头像模板**的 Agent Skill：从头像只替换表情包里一块**圆形或方形**区域（电视屏幕、手机屏幕、来电头像位、相框、放大镜镜片、表盘、灯泡玻璃…），到选素材、量几何、生成模板、机械验证与视觉验收的完整流程。
+给 [meme-generator](https://github.com/MemeCrafters/meme-generator) **0.1.x** 做**真·斗图换头模板**的 Agent Skill：从真实斗图表情包（熊猫头、狗头、鲁迅问号、拿刀/拍桌/滚蛋）出发，量脸框、定头像尺寸、逐帧跟随、生成模板、做覆盖/对齐验收。
 
-椭圆（按脸型拟合的蛋形）明确淘汰——它在聊天尺寸下会读成"贴上去的一坨"，这是本 skill 迭代后被用户否掉的方案。
+这个 skill 替代了旧版“圆形/方形开口”流程。旧流程只处理原图里画好的几何开口；新版处理**直接盖脸**的斗图换头，重点解决三类被用户否掉的问题：
+
+- 把内置模板改个名字冒充新模板；
+- 自己画插画，不像斗图；
+- 动图里头像固定不动，或者头像太小/偏了，原脸露出来。
 
 ## 目录
 
 ```text
-SKILL.md                          # 主流程：形状契约、渲染契约、选素材、验收、红旗清单
-references/composition-patterns.md # 几何测量与参数（circle/square/rect/roundrect、feather、depth、zoom）
-references/source-selection.md     # 找素材：发表情站内抓取（含接口/退避/坑）、360 图片搜索、别用的路线
-references/acceptance-contract.md  # 三关验收：机械验证 / 视觉初审 / 用户终审
-scripts/harvest_fabiaoqing.py      # 发表情（fabiaoqing.com）搜索页抓取：list → thumbs → large
-scripts/track_slots.py             # 动图开口逐帧追踪（镜片滑动/手机晃动），输出 boxes
-scripts/author_multi.py            # 多人模板：一张图多个开口，images = 开口数
-scripts/validate_pack.py           # 校验一个模板包：几何、素材、SHA-256、渲染、头像是否真的落在开口里
-tests/test_validate_pack.py        # validate_pack.py 的测试
+SKILL.md                            # 主流程：三条硬规则、量脸、尺寸、模板契约、验收、红旗
+references/head-swap-patterns.md    # 脸框测量、覆盖数学、椭圆蒙版、逐帧跟随
+references/source-selection.md      # 找真实斗图底图（发表情/斗图啦/360）与筛选标准
+references/acceptance-contract.md   # 机械验证 / 覆盖检查 / 动态跟随 / 视觉初审 / 用户终审
+scripts/harvest_fabiaoqing.py       # 发表情搜索页抓取：list → thumbs → large
+scripts/track_heads.py              # 光流跟踪 GIF 里的脸中心，输出 HEAD_CENTERS + 可视化
+scripts/check_coverage.py           # 画脸框和头像圆，检查是否完整覆盖
+templates/head_swap_template/       # 模板骨架：__init__.py.tmpl + _common.py + meta.json.tmpl
 ```
 
 ## 快速使用
 
 ```bash
-# 1. 找素材（中文斗图直接抓站内搜索，比搜索引擎干净）
-python scripts/harvest_fabiaoqing.py list   --out /tmp/fbq --pages 6 --keywords 电视 手机 屏幕 圆形
+# 1. 找真实斗图底图
+python scripts/harvest_fabiaoqing.py list --out /tmp/fbq --pages 4 \
+  --keywords 熊猫头 狗头 蘑菇头 鲁迅问号 拿刀熊猫 拍桌熊猫 滚蛋熊猫
 python scripts/harvest_fabiaoqing.py thumbs --out /tmp/fbq
-python scripts/harvest_fabiaoqing.py large  --out /tmp/fbq --pick 0 2 3
+python scripts/harvest_fabiaoqing.py large --out /tmp/fbq --pick 0 2 3
 
-# 2. 校验一个模板包（scenes.json + render.py + assets/）
-python scripts/validate_pack.py path/to/memes/<pack>
+# 2. 量首帧脸框后，跟踪逐帧中心
+python scripts/track_heads.py --file /tmp/fbq/large/000.gif --box 80,22,100,110 --out /tmp/track
 
-# 3. 跑 skill 自己的测试
-python -m pytest tests -q
+# 3. 检查覆盖（脸框是否完整落在头像圆里）
+python scripts/check_coverage.py --meta /path/to/template/meta.json --frame 0
+# 或手传：--file ... --box 80,22,100,110 --size 156 --center 130,77
+
+# 4. 复制 templates/head_swap_template，填 key / 中心 / 尺寸，生成并做原图-换头对比
 ```
-
-`validate_pack.py` 输出 `MECHANICAL_ONLY` 表示没有结构问题，**不代表视觉合格**——视觉初审和用户终审见 `references/acceptance-contract.md`。
 
 ## 核心规则
 
-- 替换区必须是原图里已经画出来的**圆形或方形**开口，形状来自原图，不按头像输入变化。
-- 头像先裁到脸部再用 cover 缩放填满开口；帽子、外侧头发、衣领、背景不得占满替换区。
-- 原图的描边、机身、镜框、字幕全部保留；box 不得吃进描边。
-- 动图先判断开口是否移动：会动就用逐帧追踪（`scripts/track_slots.py`）让头像贴着开口走，静止才复用单 box。
-- 图里有多块开口就做多人模板：`images` = 开口数，每人一个 `image`（`scripts/author_multi.py`）。
-- 机械测试全绿 ≠ 视觉合格；没有验收记录就写"未核验"，不写 0 或估算值。
+- 底图必须是真实斗图，不是内置模板、不是插画、不是空白素材。
+- 脸框不是头框：中心按脸框，不按耳朵/身体。
+- 圆形直径 ≥ 脸框对角线 + 3–5 px；要保留熊猫耳朵就换椭圆蒙版，但椭圆只保证盖脸型中央，四角是耳朵/背景，必须视觉确认旧五官不露。
+- 动图用 `HEAD_CENTERS` 逐帧贴，不能固定一个坐标。
+- 覆盖、对齐、跟随、原图信息保留分别验收；机械通过不等于视觉合格。
+- 没有验收记录写“未核验”，不写 0 或估算值。
 
 ## License
 
